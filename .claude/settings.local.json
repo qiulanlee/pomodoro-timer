@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm config *)",
+      "Bash(ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm install)",
+      "Bash(npx electron *)",
+      "Bash(/Users/lan/Documents/Vibe Coding/First cc/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron *)",
+      "Bash(python3 *)",
+      "Bash(chmod +x *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit -m '🍅 番茄钟 - 初始版本 *)",
+      "Bash(git config *)"
+    ]
+  }
+}

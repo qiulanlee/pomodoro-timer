@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍅 番茄钟</title>
+<style>
+  /* ========== 深色主题（默认）========== */
+  :root {
+    --bg: #1a1a2e;
+    --card: #222244;
+    --text: #ffffff;
+    --muted: #888;
+    --ring-w: 14;
+    --mode-bar: #222244;
+    --mode-hover: #444;
+    --reset-bg: #333344;
+    --reset-fg: #aaa;
+    --reset-hover-bg: #444455;
+    --reset-hover-fg: #fff;
+    --pause-bg: #444466;
+    --pause-hover: #555577;
+    --stat-card-bg: #222244;
+    --label-paused: #ff9800;
+    --label-ready: #666;
+    --label-running: #999;
+    --shadow: none;
+  }
+
+  /* ========== 浅色主题 ========== */
+  body[data-theme="light"] {
+    --bg: #FFF5F0;
+    --card: #FFFFFF;
+    --text: #2D2D2D;
+    --muted: #999;
+    --mode-bar: #F0F0F0;
+    --mode-hover: #E0E0E0;
+    --reset-bg: #F0F0F0;
+    --reset-fg: #888;
+    --reset-hover-bg: #E0E0E0;
+    --reset-hover-fg: #555;
+    --pause-bg: #E8E8E8;
+    --pause-hover: #DDD;
+    --stat-card-bg: #FFFFFF;
+    --label-paused: #E8890C;
+    --label-ready: #BBB;
+    --label-running: #999;
+    --shadow: 0 2px 12px rgba(0,0,0,.06);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh;
+    user-select: none; -webkit-user-select: none;
+    transition: background .4s, color .4s;
+  }
+  .app {
+    width: 380px;
+    padding: 28px 20px 20px;
+    display: flex; flex-direction: column; align-items: center;
+    position: relative;
+  }
+
+  /* 主题切换按钮 */
+  .theme-toggle {
+    position: absolute; top: 0; right: 0;
+    width: 38px; height: 38px; border: none; border-radius: 50%;
+    background: var(--card); color: var(--text);
+    font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow);
+    transition: background .4s, transform .2s;
+  }
+  .theme-toggle:hover { transform: scale(1.1); }
+  .theme-toggle:active { transform: scale(.9); }
+
+  /* 模式按钮 */
+  .modes {
+    display: flex; gap: 6px;
+    background: var(--mode-bar); border-radius: 12px; padding: 4px;
+    margin-bottom: 28px;
+    transition: background .4s;
+  }
+  .mode-btn {
+    padding: 8px 16px; border: none; border-radius: 10px;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    color: var(--muted); background: transparent;
+    transition: all .2s; white-space: nowrap;
+    font-family: inherit;
+  }
+  .mode-btn:hover { color: var(--text); background: var(--mode-hover); }
+  .mode-btn.active { color: #fff; }
+  body[data-mode="focus"] .mode-btn.active { background: #E85D5D; }
+  body[data-mode="shortBreak"] .mode-btn.active { background: #4CAF50; }
+  body[data-mode="longBreak"] .mode-btn.active { background: #5C6BC0; }
+
+  /* 计时器圆环 */
+  .ring-container {
+    position: relative; width: 260px; height: 260px;
+    margin-bottom: 24px;
+  }
+  .ring-container svg {
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+  }
+  .ring-bg {
+    fill: none;
+    stroke: var(--ring-bg, #3a1a1a);
+    stroke-width: var(--ring-w);
+    transition: stroke .4s;
+  }
+  .ring-fg {
+    fill: none;
+    stroke: var(--ring-fg, #EF5350);
+    stroke-width: var(--ring-w);
+    stroke-linecap: round;
+    transition: stroke-dashoffset .4s ease, stroke .3s;
+    filter: drop-shadow(0 0 8px var(--ring-glow, rgba(239,83,80,.4)));
+  }
+  .time-display {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    pointer-events: none;
+  }
+  .time-num {
+    font-size: 58px; font-weight: 800;
+    letter-spacing: -2px;
+    font-variant-numeric: tabular-nums;
+    transition: color .3s;
+  }
+  .time-num.warning { color: #E85D5D !important; }
+  .time-label {
+    font-size: 14px; color: var(--muted);
+    margin-top: 6px; letter-spacing: 1px;
+    transition: color .3s;
+  }
+
+  /* 控制按钮 */
+  .controls {
+    display: flex; gap: 14px; margin-bottom: 22px;
+  }
+  .btn {
+    padding: 12px 32px; border: none; border-radius: 26px;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    letter-spacing: .5px; font-family: inherit;
+    transition: all .2s;
+  }
+  .btn-start {
+    background: var(--ring-fg, #EF5350); color: #fff;
+    box-shadow: 0 4px 16px var(--ring-glow, rgba(239,83,80,.3));
+  }
+  .btn-start:hover { transform: scale(1.04); filter: brightness(1.1); }
+  .btn-start:active { transform: scale(.96); }
+  .btn-pause {
+    background: var(--pause-bg); color: var(--text);
+    transition: background .3s, color .3s;
+  }
+  .btn-pause:hover { background: var(--pause-hover); }
+  .btn-reset {
+    background: var(--reset-bg); color: var(--reset-fg);
+    transition: background .3s, color .3s;
+  }
+  .btn-reset:hover { background: var(--reset-hover-bg); color: var(--reset-hover-fg); }
+
+  /* 统计 */
+  .stats {
+    display: flex; gap: 20px;
+  }
+  .stat-card {
+    background: var(--stat-card-bg); border-radius: 12px;
+    width: 90px; padding: 12px 0; text-align: center;
+    box-shadow: var(--shadow);
+    transition: background .4s, box-shadow .4s;
+  }
+  .stat-val { font-size: 24px; font-weight: 800; }
+  .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+</style>
+</head>
+<body data-mode="focus" data-theme="dark">
+
+<div class="app">
+
+  <!-- 主题切换 -->
+  <button class="theme-toggle" id="themeToggle" title="切换主题">🌙</button>
+
+  <!-- 模式切换 -->
+  <div class="modes">
+    <button class="mode-btn active" data-mode="focus">专注 25</button>
+    <button class="mode-btn" data-mode="shortBreak">短休 5</button>
+    <button class="mode-btn" data-mode="longBreak">长休 15</button>
+  </div>
+
+  <!-- 圆形进度 -->
+  <div class="ring-container">
+    <svg viewBox="0 0 220 220">
+      <circle class="ring-bg" cx="110" cy="110" r="90"/>
+      <circle class="ring-fg" cx="110" cy="110" r="90"
+              stroke-dasharray="565.49" stroke-dashoffset="0"/>
+    </svg>
+    <div class="time-display">
+      <div class="time-num" id="time">25:00</div>
+      <div class="time-label" id="label">准备开始</div>
+    </div>
+  </div>
+
+  <!-- 按钮 -->
+  <div class="controls">
+    <button class="btn btn-start" id="btnToggle">▶  开始</button>
+    <button class="btn btn-reset" id="btnReset" style="display:none">↺  重置</button>
+  </div>
+
+  <!-- 统计 -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-val" id="statToday">0</div>
+      <div class="stat-lbl">今日番茄</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="statTotal">0</div>
+      <div class="stat-lbl">总计番茄</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="statStreak">0</div>
+      <div class="stat-lbl">连续天数</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ==================== 常量 ====================
+const CIRCUMFERENCE = 2 * Math.PI * 90; // ≈ 565.49
+const DURATIONS = { focus: 25*60, shortBreak: 5*60, longBreak: 15*60 };
+
+// 每模式的环颜色（深色/浅色共用 fg，bg 分开）
+const RING = {
+  focus: {
+    dark:  { bg: '#3a1a1a', fg: '#EF5350', glow: 'rgba(239,83,80,.45)' },
+    light: { bg: '#FFE0E0', fg: '#E85D5D', glow: 'rgba(232,93,93,.35)' },
+  },
+  shortBreak: {
+    dark:  { bg: '#1a3a1a', fg: '#66BB6A', glow: 'rgba(102,187,106,.45)' },
+    light: { bg: '#D8F0DA', fg: '#4CAF50', glow: 'rgba(76,175,80,.35)' },
+  },
+  longBreak: {
+    dark:  { bg: '#1a2a3a', fg: '#42A5F5', glow: 'rgba(66,165,245,.45)' },
+    light: { bg: '#DCE4FA', fg: '#5C6BC0', glow: 'rgba(92,107,192,.35)' },
+  },
+};
+
+// ==================== DOM ====================
+const body = document.body;
+const elTime = document.getElementById('time');
+const elLabel = document.getElementById('label');
+const elBtnToggle = document.getElementById('btnToggle');
+const elBtnReset = document.getElementById('btnReset');
+const elThemeToggle = document.getElementById('themeToggle');
+const elStatToday = document.getElementById('statToday');
+const elStatTotal = document.getElementById('statTotal');
+const elStatStreak = document.getElementById('statStreak');
+const modeBtns = document.querySelectorAll('.mode-btn');
+const ringFg = document.querySelector('.ring-fg');
+
+// ==================== 状态 ====================
+let mode = 'focus';
+let totalSecs = DURATIONS.focus;
+let remaining = totalSecs;
+let running = false;
+let timerId = null;
+let theme = localStorage.getItem('pomodoro_theme') || 'dark';
+
+// ==================== 初始化 ====================
+applyTheme();
+loadStats();
+updateUI();
+
+// ==================== 主题 ====================
+elThemeToggle.addEventListener('click', () => {
+  theme = theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('pomodoro_theme', theme);
+  applyTheme();
+  updateUI();
+});
+
+function applyTheme() {
+  body.dataset.theme = theme;
+  elThemeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+  elThemeToggle.title = theme === 'dark' ? '切换浅色' : '切换深色';
+}
+
+// ==================== 事件 ====================
+modeBtns.forEach(b => b.addEventListener('click', () => switchMode(b.dataset.mode)));
+elBtnToggle.addEventListener('click', () => running ? pause() : start());
+elBtnReset.addEventListener('click', reset);
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); running ? pause() : start(); }
+  if (e.code === 'KeyR') reset();
+  if (e.code === 'Digit1') switchMode('focus');
+  if (e.code === 'Digit2') switchMode('shortBreak');
+  if (e.code === 'Digit3') switchMode('longBreak');
+});
+
+// ==================== 核心逻辑 ====================
+function switchMode(m) {
+  if (running) pause();
+  mode = m;
+  totalSecs = DURATIONS[mode];
+  remaining = totalSecs;
+  body.dataset.mode = mode;
+  modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  updateUI();
+}
+
+function start() {
+  if (running) return;
+  running = true;
+  elBtnToggle.textContent = '⏸  暂停';
+  elBtnToggle.className = 'btn btn-pause';
+  elBtnReset.style.display = 'inline-block';
+  tick();
+}
+
+function pause() {
+  running = false;
+  clearTimeout(timerId);
+  elBtnToggle.textContent = '▶  开始';
+  elBtnToggle.className = 'btn btn-start';
+  updateUI();
+}
+
+function reset() {
+  if (running) { running = false; clearTimeout(timerId); }
+  remaining = totalSecs;
+  elBtnToggle.textContent = '▶  开始';
+  elBtnToggle.className = 'btn btn-start';
+  elBtnReset.style.display = 'none';
+  updateUI();
+}
+
+function tick() {
+  if (!running) return;
+  if (remaining <= 0) { complete(); return; }
+  remaining--;
+  updateUI();
+  timerId = setTimeout(tick, 1000);
+}
+
+function complete() {
+  running = false;
+  playChime();
+  notify();
+  if (mode === 'focus') { incrementStats(); }
+  const next = mode === 'focus' ? 'shortBreak' : 'focus';
+  switchMode(next);
+}
+
+// ==================== UI 更新 ====================
+function updateUI() {
+  // 进度环
+  const ratio = remaining / totalSecs;
+  const offset = CIRCUMFERENCE * (1 - ratio);
+  ringFg.style.strokeDashoffset = offset;
+
+  // 模式主题色
+  const r = RING[mode][theme];
+  document.documentElement.style.setProperty('--ring-bg', r.bg);
+  document.documentElement.style.setProperty('--ring-fg', r.fg);
+  document.documentElement.style.setProperty('--ring-glow', r.glow);
+
+  // 开始按钮
+  if (!running) {
+    elBtnToggle.style.background = r.fg;
+    elBtnToggle.style.boxShadow = `0 4px 16px ${r.glow}`;
+  }
+
+  // 时间
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  elTime.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  elTime.className = 'time-num' + (running && remaining <= 60 ? ' warning' : '');
+
+  // 标签
+  if (running) {
+    const labels = { focus: '专注中...', shortBreak: '休息一下 ☕', longBreak: '好好休息 🌿' };
+    elLabel.textContent = labels[mode];
+    elLabel.style.color = getComputedStyle(document.documentElement).getPropertyValue('--label-running').trim();
+  } else if (remaining !== totalSecs) {
+    elLabel.textContent = '已暂停';
+    elLabel.style.color = getComputedStyle(document.documentElement).getPropertyValue('--label-paused').trim();
+  } else {
+    elLabel.textContent = '准备开始';
+    elLabel.style.color = getComputedStyle(document.documentElement).getPropertyValue('--label-ready').trim();
+  }
+}
+
+// ==================== 音效 ====================
+function playChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [523.25, 659.25, 783.99].forEach((freq, i) => {
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = freq;
+      const t = ctx.currentTime + i * 0.15;
+      gain.gain.setValueAtTime(0.3, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      osc.start(t); osc.stop(t + 0.4);
+    });
+  } catch(e) {}
+}
+
+// ==================== 通知 ====================
+function notify() {
+  const msgs = {
+    focus: '🍅 专注时间结束！休息一下吧~',
+    shortBreak: '☕ 短休结束，继续加油！',
+    longBreak: '🌿 长休结束，准备好了吗？',
+  };
+  if (Notification.permission === 'granted') {
+    new Notification('番茄钟', { body: msgs[mode], silent: false });
+  } else if (Notification.permission === 'default') {
+    Notification.requestPermission().then(p => { if (p === 'granted') notify(); });
+  }
+  document.title = '⏰ ' + msgs[mode];
+  setTimeout(() => { document.title = '🍅 番茄钟'; }, 3000);
+}
+
+// ==================== 统计 ====================
+function loadStats() {
+  try {
+    const raw = localStorage.getItem('pomodoro_stats');
+    if (raw) {
+      const d = JSON.parse(raw);
+      const today = new Date().toDateString();
+      if (d.lastDate !== today) {
+        const yesterday = new Date(Date.now()-864e5).toDateString();
+        d.streak = d.lastDate === yesterday ? (d.streak||0)+1 : 1;
+        d.today = 0; d.lastDate = today;
+      }
+      elStatToday.textContent = d.today || 0;
+      elStatTotal.textContent = d.total || 0;
+      elStatStreak.textContent = d.streak || 0;
+    }
+  } catch(e) {}
+}
+
+function incrementStats() {
+  try {
+    const raw = localStorage.getItem('pomodoro_stats');
+    const d = raw ? JSON.parse(raw) : { total:0, today:0, streak:0, lastDate:'' };
+    d.total = (d.total||0) + 1;
+    d.today = (d.today||0) + 1;
+    d.lastDate = new Date().toDateString();
+    localStorage.setItem('pomodoro_stats', JSON.stringify(d));
+    elStatToday.textContent = d.today;
+    elStatTotal.textContent = d.total;
+    elStatStreak.textContent = d.streak;
+  } catch(e) {}
+}
+
+if (Notification.permission === 'default') Notification.requestPermission();
+</script>
+</body>
+</html>
